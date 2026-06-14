@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Runtime uploads and local transfer history
+/uploads/
+/LANDrop/
+/XiaomiTransfer/
+/transfer-history.json
+/.lan-drop-sessions/
+
+# Build outputs
+dist/
+android/app/build/
+android/build/
+android/.gradle/
+
+# Local Android SDK path
+android/local.properties
+
+# Generated intermediate iconset. The final icns is committed.
+macos/AppIcon.iconset/
+
+# OS/editor noise
+.DS_Store
+*.log
+*.tmp
+.idea/
+.vscode/

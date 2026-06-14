@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>LAN Drop</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">局域网 Wi-Fi 快传</p>
+          <h1>LAN Drop</h1>
+          <p class="subcopy">安卓手机和这台 Mac 连同一个 Wi-Fi，扫码就能传照片、视频和文件。</p>
+        </div>
+        <div class="hero-actions">
+          <button id="refreshBtn" class="ghost-btn" type="button">刷新</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel qr-panel">
+          <div class="panel-head">
+            <h2>扫码进入</h2>
+            <span id="authBadge" class="badge">检测中</span>
+          </div>
+          <div class="qr-wrap">
+            <img id="qrImage" alt="LAN QR Code" />
+          </div>
+          <div class="meta-list">
+            <div class="meta-item">
+              <span>局域网地址</span>
+              <button id="baseUrlBtn" class="linkish" type="button">加载中</button>
+            </div>
+            <div class="meta-item">
+              <span>访问码</span>
+              <strong id="accessCode">加载中</strong>
+            </div>
+            <div class="meta-item">
+              <span>保存目录</span>
+              <strong id="uploadDir">加载中</strong>
+              <button id="openUploadDirBtn" class="mini-btn" type="button">打开保存文件夹</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel upload-panel">
+          <div class="panel-head">
+            <h2>手机上传</h2>
+            <span class="badge quiet">支持多选</span>
+          </div>
+
+          <label class="dropzone" id="dropzone">
+            <input id="fileInput" type="file" multiple />
+            <span class="drop-title">点这里选文件，或直接拖进来</span>
+            <span class="drop-subtitle">照片、视频、文档都可以。上传时页面不要锁屏。</span>
+          </label>
+
+          <div id="pickedFiles" class="picked-files empty">还没有选文件</div>
+          <button id="uploadBtn" class="primary-btn" type="button" disabled>开始上传</button>
+
+          <div class="progress-card" id="progressCard" hidden>
+            <div class="progress-row">
+              <span id="progressLabel">准备上传</span>
+              <strong id="progressValue">0%</strong>
+            </div>
+            <div class="progress-bar">
+              <div id="progressFill"></div>
+            </div>
+          </div>
+
+          <div id="uploadResult" class="result-card" hidden></div>
+        </div>
+      </section>
+
+      <section class="panel files-panel">
+        <div class="panel-head">
+          <h2>最近收到的文件</h2>
+          <span id="recentCount" class="badge quiet">0</span>
+        </div>
+        <div id="filesList" class="files-list empty">还没有收到文件</div>
+      </section>
+    </main>
+
+    <dialog id="authDialog" class="auth-dialog">
+      <form method="dialog" class="auth-card" id="authForm">
+        <h2>输入访问码</h2>
+        <p>为了避免同一个 Wi-Fi 下别人误传，第一次进入要输一下访问码。</p>
+        <input id="codeInput" class="code-input" type="text" inputmode="numeric" maxlength="6" placeholder="6位数字" />
+        <div class="auth-actions">
+          <button class="ghost-btn" value="cancel" type="submit">取消</button>
+          <button id="unlockBtn" class="primary-btn" value="default" type="submit">进入</button>
+        </div>
+        <p id="authError" class="error-text" hidden>访问码不对，再试一次。</p>
+      </form>
+    </dialog>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

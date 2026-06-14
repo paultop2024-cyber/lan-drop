@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">LAN Drop</string>
+    <string name="app_subtitle">把安卓手机里的照片、视频、文件快速传到这台 Mac。</string>
+    <string name="server_url_hint">接收地址，例如 192.168.1.42:4318</string>
+    <string name="discover_mac">自动发现 Mac</string>
+    <string name="test_connection">测试连接</string>
+    <string name="pick_files">打开相册/文件</string>
+    <string name="selected_count">已选 %1$d 个文件</string>
+    <string name="no_files_selected">还没有选文件。</string>
+    <string name="upload_now">直接发送到 Mac</string>
+    <string name="status_ready">准备好了，先点“自动发现 Mac”，再选文件发送。</string>
+    <string name="testing_connection">正在测试连接…</string>
+    <string name="discovering_mac">正在发现同一 Wi-Fi 下的 Mac…</string>
+    <string name="discovered_mac">已发现 %1$s：%2$s。现在可以直接发送文件。</string>
+    <string name="discovered_mac_requires_code">已发现 %1$s：%2$s，但这个 Mac 端还在要求访问码。请退出 Mac 上的 LAN Drop，再打开桌面的新版 LAN Drop.app。</string>
+    <string name="connection_ok">连接成功：%1$s</string>
+    <string name="uploading">正在上传…</string>
+    <string name="uploading_background">已开始后台上传，可以切到后台继续传。</string>
+    <string name="upload_progress">正在上传 %1$d / %2$d</string>
+    <string name="upload_progress_percent">上传进度 %1$d%%</string>
+    <string name="upload_progress_with_time">上传进度 %1$d%% · %2$s</string>
+    <string name="upload_success">上传完成：%1$d 个文件，已保存到 %2$s</string>
+    <string name="shared_files_ready">已从相册接收 %1$d 个文件，准备发送。</string>
+</resources>
