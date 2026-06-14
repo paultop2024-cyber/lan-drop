@@ -208,14 +208,31 @@ h1 {
   cursor: pointer;
 }
 
-.dropzone.dragover {
+.phone-picker {
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  place-items: center;
+  border: 1.5px dashed rgba(14, 165, 233, 0.34);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(14, 165, 233, 0.05), rgba(37, 99, 235, 0.04)),
+    white;
+  padding: 24px 18px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.dropzone.dragover,
+.phone-picker.dragover {
   border-color: rgba(37, 99, 235, 0.8);
   background:
     linear-gradient(180deg, rgba(37, 99, 235, 0.10), rgba(14, 165, 233, 0.12)),
     white;
 }
 
-.dropzone input {
+.dropzone input,
+.phone-picker input {
   display: none;
 }
 
@@ -341,10 +358,32 @@ h1 {
   margin-top: 18px;
 }
 
+.send-phone-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 16px;
+}
+
 .file-row a {
   color: var(--accent);
   font-weight: 700;
   text-decoration: none;
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #dc2626;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .auth-dialog {
@@ -399,6 +438,10 @@ h1 {
 
 @media (max-width: 920px) {
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .send-phone-grid {
     grid-template-columns: 1fr;
   }
 

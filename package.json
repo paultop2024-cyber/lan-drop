@@ -1,7 +1,7 @@
 {
   "name": "lan-drop",
-  "version": "1.0.0",
-  "description": "LAN Wi-Fi file drop for fast Android-to-Mac photo and video transfer.",
+  "version": "1.1.0",
+  "description": "LAN Wi-Fi file drop for fast two-way Android and Mac transfer.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -17,7 +17,7 @@
     "mac"
   ],
   "author": "Codex",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "express": "^5.2.1",
     "multer": "^2.1.1",

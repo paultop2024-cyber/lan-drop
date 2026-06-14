@@ -73,6 +73,11 @@ class MainActivity : AppCompatActivity() {
             uploadSelectedFiles()
         }
 
+        binding.openMacFilesButton.setOnClickListener {
+            saveDraft()
+            openMacFilesPage()
+        }
+
         handleIncomingShare(intent)
     }
 
@@ -134,7 +139,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun discoverMac(autoUploadAfterDiscovery: Boolean = false) {
+    private fun discoverMac(autoUploadAfterDiscovery: Boolean = false, openFilesAfterDiscovery: Boolean = false) {
         setBusy(true, getString(R.string.discovering_mac))
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -150,7 +155,10 @@ class MainActivity : AppCompatActivity() {
                     getString(R.string.discovered_mac, device.name, device.baseUrl)
                 }
                 toast("已发现 Mac")
-                if (autoUploadAfterDiscovery && pickedUris.isNotEmpty() && !device.authRequired) {
+                if (openFilesAfterDiscovery) {
+                    setBusy(false)
+                    openMacFilesPage()
+                } else if (autoUploadAfterDiscovery && pickedUris.isNotEmpty() && !device.authRequired) {
                     uploadSelectedFiles()
                 } else {
                     setBusy(false)
@@ -183,6 +191,22 @@ class MainActivity : AppCompatActivity() {
         binding.progressBar.progress = 0
         observeUpload(uploadId)
         toast("已开始后台上传")
+    }
+
+    private fun openMacFilesPage() {
+        val serverUrl = binding.serverUrlInput.text?.toString().orEmpty().trim()
+        if (serverUrl.isEmpty()) {
+            discoverMac(openFilesAfterDiscovery = true)
+            toast("先发现 Mac，再打开下载列表")
+            return
+        }
+        val normalizedUrl = if (serverUrl.startsWith("http://") || serverUrl.startsWith("https://")) {
+            serverUrl
+        } else {
+            "http://$serverUrl"
+        }
+        val downloadUrl = normalizedUrl.trimEnd('/') + "/#from-mac"
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)))
     }
 
     private fun observeUpload(uploadId: UUID) {
@@ -282,6 +306,7 @@ class MainActivity : AppCompatActivity() {
         binding.discoverButton.isEnabled = !busy
         binding.testConnectionButton.isEnabled = !busy
         binding.uploadButton.isEnabled = !busy
+        binding.openMacFilesButton.isEnabled = !busy
         binding.progressBar.visibility = if (busy) View.VISIBLE else View.GONE
         binding.progressText.visibility = if (busy) View.VISIBLE else View.GONE
         binding.progressBar.isIndeterminate = busy

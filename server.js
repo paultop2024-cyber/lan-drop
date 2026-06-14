@@ -114,6 +114,10 @@ function uploadSessionRoot(uploadRoot) {
   return path.join(uploadRoot, ".lan-drop-sessions");
 }
 
+function phoneShareRoot(uploadRoot) {
+  return path.join(uploadRoot, ".lan-drop-to-phone");
+}
+
 function normalizeSessionId(value) {
   return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
 }
@@ -167,6 +171,27 @@ async function appendHistory(uploadRoot, entries) {
   await fsp.writeFile(historyPath(uploadRoot), JSON.stringify(nextHistory, null, 2));
 }
 
+async function listPhoneShareFiles(uploadRoot, limit = 100) {
+  const shareRoot = phoneShareRoot(uploadRoot);
+  ensureDir(shareRoot);
+  const entries = await fsp.readdir(shareRoot, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const abs = path.join(shareRoot, entry.name);
+    const stat = await fsp.stat(abs);
+    files.push({
+      name: entry.name,
+      size: stat.size,
+      sizeLabel: bytesLabel(stat.size),
+      modifiedAt: stat.mtime.toISOString(),
+      url: `/phone-download/${encodeURIComponent(entry.name)}`,
+    });
+  }
+  files.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+  return files.slice(0, limit);
+}
+
 function buildApp(config) {
   const app = express();
   const uploadRoot = config.uploadRoot;
@@ -191,6 +216,19 @@ function buildApp(config) {
   });
 
   const upload = multer({ storage });
+  const phoneShareStorage = multer.diskStorage({
+    destination(req, file, cb) {
+      const dest = phoneShareRoot(uploadRoot);
+      ensureDir(dest);
+      cb(null, dest);
+    },
+    filename(req, file, cb) {
+      const stamp = timestampCompact();
+      const rand = crypto.randomBytes(3).toString("hex");
+      cb(null, `${stamp}-${rand}-${safeName(file.originalname || "download")}`);
+    },
+  });
+  const phoneShareUpload = multer({ storage: phoneShareStorage });
   const chunkUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 12 * 1024 * 1024 },
@@ -277,6 +315,57 @@ function buildApp(config) {
       }
       res.json({ ok: true, path: uploadRoot });
     });
+  });
+
+  app.get("/api/phone-files", async (req, res) => {
+    if (!authOk(req, accessCode, accessDisabled)) {
+      return res.status(401).json({ ok: false, error: "ACCESS_CODE_REQUIRED" });
+    }
+    res.json({ ok: true, files: await listPhoneShareFiles(uploadRoot) });
+  });
+
+  app.post("/api/phone-files", phoneShareUpload.array("files"), async (req, res) => {
+    if (!authOk(req, accessCode, accessDisabled)) {
+      for (const file of req.files || []) {
+        await fsp.rm(file.path, { force: true });
+      }
+      return res.status(401).json({ ok: false, error: "ACCESS_CODE_REQUIRED" });
+    }
+    const files = (req.files || []).map((file) => ({
+      originalName: file.originalname,
+      storedName: path.basename(file.filename),
+      size: file.size,
+      sizeLabel: bytesLabel(file.size),
+      url: `/phone-download/${encodeURIComponent(file.filename)}`,
+    }));
+    await appendHistory(
+      uploadRoot,
+      files.map((file) => ({
+        filename: file.originalName,
+        storedName: file.storedName,
+        size: file.size,
+        direction: "send",
+        timestamp: Math.floor(Date.now() / 1000),
+        path: path.join(phoneShareRoot(uploadRoot), file.storedName),
+      }))
+    );
+    res.json({
+      ok: true,
+      count: files.length,
+      files,
+    });
+  });
+
+  app.delete("/api/phone-files/:filename", async (req, res) => {
+    if (!authOk(req, accessCode, accessDisabled)) {
+      return res.status(401).json({ ok: false, error: "ACCESS_CODE_REQUIRED" });
+    }
+    const filePath = resolveInsideUploadRoot(uploadRoot, ".lan-drop-to-phone", req.params.filename);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ ok: false, error: "FILE_NOT_FOUND" });
+    }
+    await fsp.rm(filePath, { force: true });
+    res.json({ ok: true });
   });
 
   async function handleUpload(req, res, legacyResponse = false) {
@@ -469,7 +558,7 @@ function buildApp(config) {
     if (!filePath || !fs.existsSync(filePath)) {
       return res.status(404).json({ ok: false, error: "FILE_NOT_FOUND" });
     }
-    res.download(filePath);
+    res.download(filePath, path.basename(filePath), { dotfiles: "allow" });
   });
 
   app.get("/download/:filename", async (req, res) => {
@@ -485,7 +574,18 @@ function buildApp(config) {
     if (!filePath || !fs.existsSync(filePath)) {
       return res.status(404).json({ ok: false, error: "FILE_NOT_FOUND" });
     }
-    res.download(filePath);
+    res.download(filePath, path.basename(filePath), { dotfiles: "allow" });
+  });
+
+  app.get("/phone-download/:filename", (req, res) => {
+    if (!authOk(req, accessCode, accessDisabled)) {
+      return res.status(401).json({ ok: false, error: "ACCESS_CODE_REQUIRED" });
+    }
+    const filePath = resolveInsideUploadRoot(uploadRoot, ".lan-drop-to-phone", req.params.filename);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ ok: false, error: "FILE_NOT_FOUND" });
+    }
+    res.download(filePath, path.basename(filePath), { dotfiles: "allow" });
   });
 
   app.get("/api/download-all", async (req, res) => {

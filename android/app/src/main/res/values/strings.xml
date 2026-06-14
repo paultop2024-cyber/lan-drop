@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">LAN Drop</string>
-    <string name="app_subtitle">把安卓手机里的照片、视频、文件快速传到这台 Mac。</string>
+    <string name="app_subtitle">安卓手机和 Mac 在同一个 Wi-Fi 下，照片、视频、文件可以双向传。</string>
     <string name="server_url_hint">接收地址，例如 192.168.1.42:4318</string>
     <string name="discover_mac">自动发现 Mac</string>
     <string name="test_connection">测试连接</string>
@@ -8,6 +8,7 @@
     <string name="selected_count">已选 %1$d 个文件</string>
     <string name="no_files_selected">还没有选文件。</string>
     <string name="upload_now">直接发送到 Mac</string>
+    <string name="open_mac_files">打开 Mac 发来的文件</string>
     <string name="status_ready">准备好了，先点“自动发现 Mac”，再选文件发送。</string>
     <string name="testing_connection">正在测试连接…</string>
     <string name="discovering_mac">正在发现同一 Wi-Fi 下的 Mac…</string>

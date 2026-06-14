@@ -2,7 +2,9 @@ const state = {
   status: null,
   accessCode: localStorage.getItem("lanDropCode") || "",
   files: [],
+  phoneFiles: [],
   selectedFiles: [],
+  phoneSelectedFiles: [],
 };
 
 const els = {
@@ -14,6 +16,13 @@ const els = {
   uploadDir: document.getElementById("uploadDir"),
   recentCount: document.getElementById("recentCount"),
   filesList: document.getElementById("filesList"),
+  phoneFileCount: document.getElementById("phoneFileCount"),
+  phoneFilesList: document.getElementById("phoneFilesList"),
+  phonePickedFiles: document.getElementById("phonePickedFiles"),
+  phoneFileInput: document.getElementById("phoneFileInput"),
+  phoneDropzone: document.getElementById("phoneDropzone"),
+  shareToPhoneBtn: document.getElementById("shareToPhoneBtn"),
+  phoneShareResult: document.getElementById("phoneShareResult"),
   pickedFiles: document.getElementById("pickedFiles"),
   fileInput: document.getElementById("fileInput"),
   uploadBtn: document.getElementById("uploadBtn"),
@@ -95,6 +104,30 @@ function renderPickedFiles() {
   els.uploadBtn.disabled = false;
 }
 
+function renderPhonePickedFiles() {
+  if (!state.phoneSelectedFiles.length) {
+    els.phonePickedFiles.className = "picked-files empty";
+    els.phonePickedFiles.textContent = "还没有选择要发给手机的文件";
+    els.shareToPhoneBtn.disabled = true;
+    return;
+  }
+  els.phonePickedFiles.className = "picked-files";
+  els.phonePickedFiles.innerHTML = state.phoneSelectedFiles
+    .map(
+      (file) => `
+        <div class="picked-file">
+          <div class="file-title">${escapeHtml(file.name)}</div>
+          <div class="file-meta">
+            <span>${(file.size / 1024 / 1024).toFixed(1)} MB</span>
+            <span>${escapeHtml(file.type || "未知类型")}</span>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+  els.shareToPhoneBtn.disabled = false;
+}
+
 function renderFiles() {
   els.recentCount.textContent = String(state.files.length);
   if (!state.files.length) {
@@ -120,6 +153,33 @@ function renderFiles() {
     .join("");
 }
 
+function renderPhoneFiles() {
+  els.phoneFileCount.textContent = String(state.phoneFiles.length);
+  if (!state.phoneFiles.length) {
+    els.phoneFilesList.className = "files-list empty";
+    els.phoneFilesList.textContent = "还没有可下载文件";
+    return;
+  }
+  els.phoneFilesList.className = "files-list";
+  els.phoneFilesList.innerHTML = state.phoneFiles
+    .map(
+      (file) => `
+        <div class="file-row">
+          <div class="file-title">${escapeHtml(file.name)}</div>
+          <div class="file-meta">
+            <span>${escapeHtml(file.sizeLabel)}</span>
+            <span>${escapeHtml(formatTime(file.modifiedAt))}</span>
+          </div>
+          <div class="file-actions">
+            <a href="${escapeHtml(phoneFileDownloadUrl(file))}" download>下载到手机</a>
+            <button class="link-button" type="button" data-delete-phone-file="${escapeHtml(file.name)}">移除</button>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+}
+
 function escapeHtml(text) {
   return String(text)
     .replaceAll("&", "&amp;")
@@ -129,6 +189,14 @@ function escapeHtml(text) {
 }
 
 function fileOpenUrl(file) {
+  const url = new URL(file.url, window.location.origin);
+  if (state.status?.authRequired && state.accessCode) {
+    url.searchParams.set("code", state.accessCode);
+  }
+  return `${url.pathname}${url.search}`;
+}
+
+function phoneFileDownloadUrl(file) {
   const url = new URL(file.url, window.location.origin);
   if (state.status?.authRequired && state.accessCode) {
     url.searchParams.set("code", state.accessCode);
@@ -150,6 +218,20 @@ async function loadFiles() {
     if (error.message === "AUTH") {
       await requestCode();
       return loadFiles();
+    }
+    throw error;
+  }
+}
+
+async function loadPhoneFiles() {
+  try {
+    const data = await api("/api/phone-files");
+    state.phoneFiles = data.files;
+    renderPhoneFiles();
+  } catch (error) {
+    if (error.message === "AUTH") {
+      await requestCode();
+      return loadPhoneFiles();
     }
     throw error;
   }
@@ -183,6 +265,12 @@ function showResult(html, ok = true) {
   els.uploadResult.hidden = false;
   els.uploadResult.style.color = ok ? "var(--good)" : "#dc2626";
   els.uploadResult.innerHTML = html;
+}
+
+function showPhoneShareResult(html, ok = true) {
+  els.phoneShareResult.hidden = false;
+  els.phoneShareResult.style.color = ok ? "var(--good)" : "#dc2626";
+  els.phoneShareResult.innerHTML = html;
 }
 
 async function requestCode() {
@@ -279,6 +367,52 @@ async function uploadFiles() {
   xhr.send(formData);
 }
 
+async function shareFilesToPhone() {
+  if (!state.phoneSelectedFiles.length) return;
+  if (state.status?.authRequired && !state.accessCode) {
+    await requestCode();
+  }
+  const formData = new FormData();
+  for (const file of state.phoneSelectedFiles) {
+    formData.append("files", file);
+  }
+
+  els.shareToPhoneBtn.disabled = true;
+  showPhoneShareResult("正在准备给手机下载…", true);
+  try {
+    const data = await api("/api/phone-files", {
+      method: "POST",
+      body: formData,
+    });
+    showPhoneShareResult(`已放入 ${data.count} 个文件。手机打开本页，点“下载到手机”即可保存。`, true);
+    state.phoneSelectedFiles = [];
+    els.phoneFileInput.value = "";
+    renderPhonePickedFiles();
+    await loadPhoneFiles();
+  } catch (error) {
+    if (error.message === "AUTH") {
+      await requestCode();
+      els.shareToPhoneBtn.disabled = false;
+      return shareFilesToPhone();
+    }
+    showPhoneShareResult("准备下载列表失败，请再试一次。", false);
+    els.shareToPhoneBtn.disabled = false;
+  }
+}
+
+async function deletePhoneFile(filename) {
+  try {
+    await api(`/api/phone-files/${encodeURIComponent(filename)}`, { method: "DELETE" });
+    await loadPhoneFiles();
+  } catch (error) {
+    if (error.message === "AUTH") {
+      await requestCode();
+      return deletePhoneFile(filename);
+    }
+    showPhoneShareResult("移除失败，请刷新后再试。", false);
+  }
+}
+
 function bindDropzone() {
   ["dragenter", "dragover"].forEach((eventName) => {
     els.dropzone.addEventListener(eventName, (event) => {
@@ -299,16 +433,48 @@ function bindDropzone() {
   });
 }
 
+function bindPhoneDropzone() {
+  ["dragenter", "dragover"].forEach((eventName) => {
+    els.phoneDropzone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      els.phoneDropzone.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((eventName) => {
+    els.phoneDropzone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      els.phoneDropzone.classList.remove("dragover");
+    });
+  });
+  els.phoneDropzone.addEventListener("drop", (event) => {
+    const files = Array.from(event.dataTransfer.files || []);
+    state.phoneSelectedFiles = files;
+    renderPhonePickedFiles();
+  });
+}
+
 async function init() {
   bindDropzone();
+  bindPhoneDropzone();
   els.fileInput.addEventListener("change", () => {
     state.selectedFiles = Array.from(els.fileInput.files || []);
     renderPickedFiles();
   });
+  els.phoneFileInput.addEventListener("change", () => {
+    state.phoneSelectedFiles = Array.from(els.phoneFileInput.files || []);
+    renderPhonePickedFiles();
+  });
   els.uploadBtn.addEventListener("click", uploadFiles);
+  els.shareToPhoneBtn.addEventListener("click", shareFilesToPhone);
+  els.phoneFilesList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-phone-file]");
+    if (!button) return;
+    deletePhoneFile(button.dataset.deletePhoneFile);
+  });
   els.refreshBtn.addEventListener("click", async () => {
     await loadStatus();
     await loadFiles();
+    await loadPhoneFiles();
   });
   els.baseUrlBtn.addEventListener("click", async () => {
     if (navigator.clipboard && state.status?.baseUrl) {
@@ -326,7 +492,9 @@ async function init() {
     await requestCode();
   }
   await loadFiles();
+  await loadPhoneFiles();
   renderPickedFiles();
+  renderPhonePickedFiles();
 }
 
 init().catch((error) => {

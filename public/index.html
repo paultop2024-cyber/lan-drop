@@ -12,7 +12,7 @@
         <div>
           <p class="eyebrow">局域网 Wi-Fi 快传</p>
           <h1>LAN Drop</h1>
-          <p class="subcopy">安卓手机和这台 Mac 连同一个 Wi-Fi，扫码就能传照片、视频和文件。</p>
+          <p class="subcopy">安卓手机和这台 Mac 连同一个 Wi-Fi，就能互传照片、视频和文件。</p>
         </div>
         <div class="hero-actions">
           <button id="refreshBtn" class="ghost-btn" type="button">刷新</button>
@@ -47,7 +47,7 @@
 
         <div class="panel upload-panel">
           <div class="panel-head">
-            <h2>手机上传</h2>
+            <h2>手机发到 Mac</h2>
             <span class="badge quiet">支持多选</span>
           </div>
 
@@ -72,6 +72,26 @@
 
           <div id="uploadResult" class="result-card" hidden></div>
         </div>
+      </section>
+
+      <section class="panel files-panel" id="from-mac">
+        <div class="panel-head">
+          <h2>Mac 发到手机</h2>
+          <span id="phoneFileCount" class="badge quiet">0</span>
+        </div>
+        <div class="send-phone-grid">
+          <label class="phone-picker" id="phoneDropzone">
+            <input id="phoneFileInput" type="file" multiple />
+            <span class="drop-title">选择 Mac 上的文件</span>
+            <span class="drop-subtitle">选好后会放到手机可下载列表里，手机打开这个页面就能下载。</span>
+          </label>
+          <div>
+            <div id="phonePickedFiles" class="picked-files empty">还没有选择要发给手机的文件</div>
+            <button id="shareToPhoneBtn" class="primary-btn" type="button" disabled>放到手机可下载列表</button>
+            <div id="phoneShareResult" class="result-card" hidden></div>
+          </div>
+        </div>
+        <div id="phoneFilesList" class="files-list empty">还没有可下载文件</div>
       </section>
 
       <section class="panel files-panel">
