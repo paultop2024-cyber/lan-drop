@@ -320,8 +320,9 @@ class UploadRepository(private val context: Context) {
             .setTitle(file.name)
             .setDescription("LAN Drop 正在接收 Mac 发来的文件")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(true)
+            .setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI)
+            .setAllowedOverMetered(false)
+            .setAllowedOverRoaming(false)
             .setDestinationInExternalPublicDir(
                 Environment.DIRECTORY_DOWNLOADS,
                 "LANDrop/${safeDownloadName(file.name)}"
