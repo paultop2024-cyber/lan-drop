@@ -8,57 +8,63 @@
   </head>
   <body>
     <main class="app-shell">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">局域网 Wi-Fi 快传</p>
-          <h1>LAN Drop</h1>
-          <p class="subcopy">安卓手机和这台 Mac 连同一个 Wi-Fi，就能互传照片、视频和文件。</p>
+      <section class="titlebar">
+        <div class="brand">
+          <div class="app-icon" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <p class="eyebrow">LAN Drop</p>
+            <h1>Android 和 Mac 的局域网快传</h1>
+          </div>
         </div>
-        <div class="hero-actions">
-          <button id="refreshBtn" class="ghost-btn" type="button">刷新</button>
-        </div>
+        <button id="refreshBtn" class="toolbar-btn" type="button">刷新状态</button>
       </section>
 
-      <section class="grid">
-        <div class="panel qr-panel">
-          <div class="panel-head">
-            <h2>扫码进入</h2>
-            <span id="authBadge" class="badge">检测中</span>
-          </div>
-          <div class="qr-wrap">
-            <img id="qrImage" alt="LAN QR Code" />
-          </div>
-          <div class="meta-list">
-            <div class="meta-item">
-              <span>局域网地址</span>
-              <button id="baseUrlBtn" class="linkish" type="button">加载中</button>
-            </div>
-            <div class="meta-item">
-              <span>访问码</span>
-              <strong id="accessCode">加载中</strong>
-            </div>
-            <div class="meta-item">
-              <span>保存目录</span>
-              <strong id="uploadDir">加载中</strong>
-              <button id="openUploadDirBtn" class="mini-btn" type="button">打开保存文件夹</button>
-            </div>
+      <section class="status-panel" aria-label="当前状态">
+        <div class="status-main">
+          <span class="live-dot" aria-hidden="true"></span>
+          <div>
+            <p class="status-label">当前状态</p>
+            <strong id="authBadge">检测中</strong>
           </div>
         </div>
-
-        <div class="panel upload-panel">
-          <div class="panel-head">
-            <h2>手机发到 Mac</h2>
-            <span class="badge quiet">支持多选</span>
+        <div class="status-grid">
+          <div class="status-item">
+            <span>连接地址</span>
+            <button id="baseUrlBtn" class="copy-address" type="button">加载中</button>
           </div>
+          <div class="status-item">
+            <span>访问码</span>
+            <strong id="accessCode">加载中</strong>
+          </div>
+          <div class="status-item wide">
+            <span>保存到</span>
+            <strong id="uploadDir">加载中</strong>
+          </div>
+        </div>
+        <button id="openUploadDirBtn" class="secondary-btn" type="button">打开保存文件夹</button>
+      </section>
+
+      <section class="transfer-grid">
+        <article class="transfer-card receive-card">
+          <header class="card-head">
+            <div>
+              <p class="card-kicker">Receive</p>
+              <h2>收文件到 Mac</h2>
+            </div>
+            <span id="recentCount" class="count-pill">0</span>
+          </header>
 
           <label class="dropzone" id="dropzone">
             <input id="fileInput" type="file" multiple />
-            <span class="drop-title">点这里选文件，或直接拖进来</span>
-            <span class="drop-subtitle">照片、视频、文档都可以。上传时页面不要锁屏。</span>
+            <span class="drop-icon" aria-hidden="true">↓</span>
+            <span class="drop-title">等待手机发送，或拖文件到这里</span>
+            <span class="drop-subtitle">手机端点“直接发送到 Mac”。也可以在浏览器里手动选择文件上传。</span>
           </label>
 
           <div id="pickedFiles" class="picked-files empty">还没有选文件</div>
-          <button id="uploadBtn" class="primary-btn" type="button" disabled>开始上传</button>
+          <button id="uploadBtn" class="primary-btn" type="button" disabled>上传到 Mac</button>
 
           <div class="progress-card" id="progressCard" hidden>
             <div class="progress-row">
@@ -71,45 +77,54 @@
           </div>
 
           <div id="uploadResult" class="result-card" hidden></div>
-        </div>
-      </section>
 
-      <section class="panel files-panel" id="from-mac">
-        <div class="panel-head">
-          <h2>Mac 发到手机</h2>
-          <span id="phoneFileCount" class="badge quiet">0</span>
-        </div>
-        <div class="send-phone-grid">
+          <section class="mini-section">
+            <div class="mini-head">
+              <h3>最近收到</h3>
+              <span>自动保存到上面的文件夹</span>
+            </div>
+            <div id="filesList" class="files-list empty">还没有收到文件</div>
+          </section>
+        </article>
+
+        <article class="transfer-card send-card" id="from-mac">
+          <header class="card-head">
+            <div>
+              <p class="card-kicker">Send</p>
+              <h2>发文件到手机</h2>
+            </div>
+            <span id="phoneFileCount" class="count-pill">0</span>
+          </header>
+
           <label class="phone-picker" id="phoneDropzone">
             <input id="phoneFileInput" type="file" multiple />
+            <span class="drop-icon" aria-hidden="true">↑</span>
             <span class="drop-title">选择 Mac 上的文件</span>
-            <span class="drop-subtitle">选好后会放到手机可下载列表里，手机打开这个页面就能下载。</span>
+            <span class="drop-subtitle">选好后会出现在手机 App 的“Mac 发来的文件”里，点接收即可保存。</span>
           </label>
-          <div>
-            <div id="phonePickedFiles" class="picked-files empty">还没有选择要发给手机的文件</div>
-            <button id="shareToPhoneBtn" class="primary-btn" type="button" disabled>放到手机可下载列表</button>
-            <div id="phoneShareResult" class="result-card" hidden></div>
-          </div>
-        </div>
-        <div id="phoneFilesList" class="files-list empty">还没有可下载文件</div>
-      </section>
 
-      <section class="panel files-panel">
-        <div class="panel-head">
-          <h2>最近收到的文件</h2>
-          <span id="recentCount" class="badge quiet">0</span>
-        </div>
-        <div id="filesList" class="files-list empty">还没有收到文件</div>
+          <div id="phonePickedFiles" class="picked-files empty">还没有选择要发给手机的文件</div>
+          <button id="shareToPhoneBtn" class="primary-btn" type="button" disabled>发送给手机接收</button>
+          <div id="phoneShareResult" class="result-card" hidden></div>
+
+          <section class="mini-section">
+            <div class="mini-head">
+              <h3>等待手机接收</h3>
+              <span>手机接收后可在这里移除</span>
+            </div>
+            <div id="phoneFilesList" class="files-list empty">还没有可接收文件</div>
+          </section>
+        </article>
       </section>
     </main>
 
     <dialog id="authDialog" class="auth-dialog">
       <form method="dialog" class="auth-card" id="authForm">
         <h2>输入访问码</h2>
-        <p>为了避免同一个 Wi-Fi 下别人误传，第一次进入要输一下访问码。</p>
+        <p>为了避免同一个网络下别人误传，第一次进入要输一下访问码。</p>
         <input id="codeInput" class="code-input" type="text" inputmode="numeric" maxlength="6" placeholder="6位数字" />
         <div class="auth-actions">
-          <button class="ghost-btn" value="cancel" type="submit">取消</button>
+          <button class="toolbar-btn" value="cancel" type="submit">取消</button>
           <button id="unlockBtn" class="primary-btn" value="default" type="submit">进入</button>
         </div>
         <p id="authError" class="error-text" hidden>访问码不对，再试一次。</p>

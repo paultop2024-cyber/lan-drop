@@ -8,7 +8,6 @@ const state = {
 };
 
 const els = {
-  qrImage: document.getElementById("qrImage"),
   authBadge: document.getElementById("authBadge"),
   baseUrlBtn: document.getElementById("baseUrlBtn"),
   openUploadDirBtn: document.getElementById("openUploadDirBtn"),
@@ -73,11 +72,10 @@ function formatTime(iso) {
 function renderStatus() {
   const status = state.status;
   if (!status) return;
-  els.qrImage.src = status.qrDataUrl;
   els.baseUrlBtn.textContent = status.baseUrl;
   els.accessCode.textContent = status.authRequired ? status.accessCodeHint : "未开启";
   els.uploadDir.textContent = status.uploadsDir;
-  els.authBadge.textContent = status.authRequired ? "需访问码" : "免访问码";
+  els.authBadge.textContent = status.authRequired ? "在线，需访问码" : "在线，免访问码";
 }
 
 function renderPickedFiles() {
@@ -384,7 +382,7 @@ async function shareFilesToPhone() {
       method: "POST",
       body: formData,
     });
-    showPhoneShareResult(`已放入 ${data.count} 个文件。手机打开本页，点“下载到手机”即可保存。`, true);
+    showPhoneShareResult(`已放入 ${data.count} 个文件。手机端点“查看 Mac 发来的文件”，即可直接接收。`, true);
     state.phoneSelectedFiles = [];
     els.phoneFileInput.value = "";
     renderPhonePickedFiles();
