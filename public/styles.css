@@ -301,7 +301,6 @@ h3 {
   font-weight: 750;
 }
 
-.receive-state,
 .phone-picker {
   display: grid;
   place-items: center;
@@ -318,10 +317,6 @@ h3 {
   cursor: pointer;
   text-align: center;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
-}
-
-.receive-state {
-  cursor: default;
 }
 
 .phone-picker {
@@ -342,23 +337,58 @@ h3 {
   display: none;
 }
 
-.receive-hint {
-  display: inline-flex;
+.receive-summary {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px 12px;
-  border: 1px solid rgba(31, 157, 85, 0.14);
-  border-radius: 999px;
-  background: rgba(31, 157, 85, 0.08);
-  color: var(--good);
+  gap: 12px;
+  min-height: 72px;
+  margin-top: 18px;
+  padding: 14px 15px;
+  border: 1px solid var(--line-soft);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.receive-summary strong {
+  display: block;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.receive-summary p {
+  margin-top: 3px;
+  color: var(--muted);
   font-size: 13px;
+  line-height: 1.45;
+}
+
+.receive-summary.receiving {
+  border-color: rgba(0, 122, 255, 0.18);
+  background: rgba(0, 122, 255, 0.07);
+}
+
+.receive-summary.received {
+  border-color: rgba(31, 157, 85, 0.16);
+  background: rgba(31, 157, 85, 0.08);
 }
 
 .live-dot.small {
   width: 8px;
   height: 8px;
   box-shadow: 0 0 0 4px rgba(31, 157, 85, 0.12);
+}
+
+.status-mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--good);
+  color: white;
+  font-size: 15px;
+  font-weight: 850;
 }
 
 .drop-icon {
@@ -629,7 +659,6 @@ h3 {
     padding: 16px;
   }
 
-  .dropzone,
   .phone-picker {
     min-height: 190px;
   }

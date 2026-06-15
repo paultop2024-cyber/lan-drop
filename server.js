@@ -13,6 +13,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DISCOVERY_PORT = 50000;
 const activePhoneTransfers = new Map();
+const activeReceiveTransfers = new Map();
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -131,6 +132,52 @@ function trackPhoneShareTransfer(req, res, next) {
   });
   res.on("finish", () => activePhoneTransfers.delete(transferId));
   res.on("close", () => activePhoneTransfers.delete(transferId));
+  next();
+}
+
+function activeReceiveList() {
+  return Array.from(activeReceiveTransfers.values()).map((transfer) => {
+    const totalBytes = Number(transfer.totalBytes || 0);
+    const receivedBytes = Number(transfer.receivedBytes || 0);
+    const percent = totalBytes > 0 ? Math.min(100, Math.round((receivedBytes / totalBytes) * 100)) : null;
+    return {
+      ...transfer,
+      percent,
+      receivedLabel: bytesLabel(receivedBytes),
+      totalLabel: totalBytes > 0 ? bytesLabel(totalBytes) : "",
+    };
+  });
+}
+
+function updateReceiveTransfer(id, patch) {
+  const now = new Date().toISOString();
+  const old = activeReceiveTransfers.get(id) || {
+    id,
+    sender: "Android",
+    startedAt: now,
+  };
+  activeReceiveTransfers.set(id, {
+    ...old,
+    ...patch,
+    updatedAt: now,
+  });
+}
+
+function finishReceiveTransfer(id) {
+  activeReceiveTransfers.delete(id);
+}
+
+function trackLegacyReceiveTransfer(req, res, next) {
+  const transferId = crypto.randomUUID();
+  const totalBytes = Number(req.headers["content-length"] || 0);
+  updateReceiveTransfer(transferId, {
+    filename: "手机发送的文件",
+    totalBytes: Number.isFinite(totalBytes) ? totalBytes : 0,
+    receivedBytes: 0,
+    status: "receiving",
+  });
+  res.on("finish", () => finishReceiveTransfer(transferId));
+  res.on("close", () => finishReceiveTransfer(transferId));
   next();
 }
 
@@ -281,7 +328,11 @@ function buildApp(config) {
     if (!authOk(req, accessCode, accessDisabled)) {
       return res.status(401).json({ ok: false, error: "ACCESS_CODE_REQUIRED" });
     }
-    res.json({ ok: true, files: await listRecentFiles(uploadRoot) });
+    res.json({
+      ok: true,
+      files: await listRecentFiles(uploadRoot),
+      activeReceives: activeReceiveList(),
+    });
   });
 
   app.get("/files", async (req, res) => {
@@ -432,8 +483,8 @@ function buildApp(config) {
     });
   }
 
-  app.post("/api/upload", upload.array("files"), (req, res) => handleUpload(req, res));
-  app.post("/upload", upload.any(), (req, res) => {
+  app.post("/api/upload", trackLegacyReceiveTransfer, upload.array("files"), (req, res) => handleUpload(req, res));
+  app.post("/upload", trackLegacyReceiveTransfer, upload.any(), (req, res) => {
     if (!req.files?.length && req.file) {
       req.files = [req.file];
     }
@@ -473,6 +524,15 @@ function buildApp(config) {
 
     const finalPath = resolveInsideUploadRoot(uploadRoot, meta.day, meta.storedName);
     const complete = Boolean(finalPath && fs.existsSync(finalPath));
+    if (!complete) {
+      const offset = await fileSizeIfExists(paths.partPath);
+      updateReceiveTransfer(sessionId, {
+        filename: meta.originalName,
+        totalBytes: Number(meta.totalSize || totalSize),
+        receivedBytes: offset,
+        status: "receiving",
+      });
+    }
     res.json({
       ok: true,
       sessionId,
@@ -510,6 +570,12 @@ function buildApp(config) {
     ensureDir(paths.root);
     await fsp.appendFile(paths.partPath, req.file.buffer);
     const nextOffset = currentOffset + req.file.buffer.length;
+    updateReceiveTransfer(sessionId, {
+      filename: meta.originalName,
+      totalBytes: Number(meta.totalSize || 0),
+      receivedBytes: nextOffset,
+      status: "receiving",
+    });
     res.json({ ok: true, nextOffset });
   });
 
@@ -537,6 +603,7 @@ function buildApp(config) {
       return res.status(400).json({ ok: false, error: "INVALID_FINAL_PATH" });
     }
     if (fs.existsSync(finalPath)) {
+      finishReceiveTransfer(sessionId);
       return res.json({
         ok: true,
         savedTo: finalDir,
@@ -551,6 +618,7 @@ function buildApp(config) {
     ensureDir(finalDir);
     await fsp.rename(paths.partPath, finalPath);
     await fsp.rm(paths.metaPath, { force: true });
+    finishReceiveTransfer(sessionId);
     await appendHistory(uploadRoot, [
       {
         filename: meta.originalName,

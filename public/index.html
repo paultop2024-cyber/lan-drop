@@ -56,19 +56,17 @@
             <span id="recentCount" class="count-pill">0</span>
           </header>
 
-          <div class="receive-state">
-            <span class="drop-icon" aria-hidden="true">↓</span>
-            <span class="drop-title">正在等待手机发送</span>
-            <span class="drop-subtitle">手机端选择照片、视频或文件，点“直接发送到 Mac”。发送完成后，文件会自动出现在下面。</span>
-            <div class="receive-hint">
-              <span class="live-dot small" aria-hidden="true"></span>
-              <strong>接收服务已开启</strong>
+          <div id="receiveStatus" class="receive-summary idle">
+            <span class="live-dot small" aria-hidden="true"></span>
+            <div>
+              <strong>等待手机发送</strong>
+              <p>手机端点“直接发送到 Mac”，收到后会自动出现在列表里。</p>
             </div>
           </div>
 
           <section class="mini-section">
             <div class="mini-head">
-              <h3>最近收到</h3>
+              <h3>收文件列表</h3>
               <span>收到后自动刷新</span>
             </div>
             <div id="filesList" class="files-list empty">还没有收到文件</div>

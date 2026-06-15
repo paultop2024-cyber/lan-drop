@@ -2,6 +2,7 @@ const state = {
   status: null,
   accessCode: localStorage.getItem("lanDropCode") || "",
   files: [],
+  activeReceives: [],
   phoneFiles: [],
   phoneSelectedFiles: [],
 };
@@ -13,6 +14,7 @@ const els = {
   accessCode: document.getElementById("accessCode"),
   uploadDir: document.getElementById("uploadDir"),
   recentCount: document.getElementById("recentCount"),
+  receiveStatus: document.getElementById("receiveStatus"),
   filesList: document.getElementById("filesList"),
   phoneFileCount: document.getElementById("phoneFileCount"),
   phoneFilesList: document.getElementById("phoneFilesList"),
@@ -94,6 +96,7 @@ function renderPhonePickedFiles() {
 
 function renderFiles() {
   els.recentCount.textContent = String(state.files.length);
+  renderReceiveStatus();
   if (!state.files.length) {
     els.filesList.className = "files-list empty";
     els.filesList.textContent = "还没有收到文件";
@@ -115,6 +118,46 @@ function renderFiles() {
       `
     )
     .join("");
+}
+
+function renderReceiveStatus() {
+  const active = state.activeReceives[0];
+  if (active) {
+    const detail = active.percent === null
+      ? "正在接收文件，请稍等…"
+      : `${active.percent}% · ${active.receivedLabel || "0 B"} / ${active.totalLabel || ""}`;
+    els.receiveStatus.className = "receive-summary receiving";
+    els.receiveStatus.innerHTML = `
+      <span class="live-dot small" aria-hidden="true"></span>
+      <div>
+        <strong>正在接收：${escapeHtml(active.filename || "手机发送的文件")}</strong>
+        <p>${escapeHtml(detail)}</p>
+      </div>
+    `;
+    return;
+  }
+
+  const latest = state.files[0];
+  if (latest) {
+    els.receiveStatus.className = "receive-summary received";
+    els.receiveStatus.innerHTML = `
+      <span class="status-mark" aria-hidden="true">✓</span>
+      <div>
+        <strong>已接收 ${state.files.length} 个文件</strong>
+        <p>最近收到：${escapeHtml(latest.name)} · ${escapeHtml(formatTime(latest.modifiedAt))}</p>
+      </div>
+    `;
+    return;
+  }
+
+  els.receiveStatus.className = "receive-summary idle";
+  els.receiveStatus.innerHTML = `
+    <span class="live-dot small" aria-hidden="true"></span>
+    <div>
+      <strong>等待手机发送</strong>
+      <p>手机端点“直接发送到 Mac”，收到后会自动出现在列表里。</p>
+    </div>
+  `;
 }
 
 function renderPhoneFiles() {
@@ -177,6 +220,7 @@ async function loadFiles() {
   try {
     const data = await api("/api/files");
     state.files = data.files;
+    state.activeReceives = data.activeReceives || [];
     renderFiles();
   } catch (error) {
     if (error.message === "AUTH") {
