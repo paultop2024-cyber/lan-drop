@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -14,8 +16,12 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.lifecycleScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.google.android.material.button.MaterialButton
 import com.codex.landrop.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -25,12 +31,27 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var repository: UploadRepository
     private val pickedUris = mutableListOf<Uri>()
+    private var macFiles = emptyList<MacDownloadFile>()
     private var currentUploadId: UUID? = null
+    private var macFilesPollingJob: Job? = null
+    private var pendingReceiveIndex: Int? = null
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
         // Uploads still work if the user declines; only the foreground notification is hidden.
+    }
+
+    private val storagePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val index = pendingReceiveIndex
+        pendingReceiveIndex = null
+        if (granted && index != null) {
+            receiveMacFile(index)
+        } else {
+            toast("没有存储权限，无法保存到 Downloads")
+        }
     }
 
     private val pickFilesLauncher = registerForActivityResult(
@@ -75,10 +96,21 @@ class MainActivity : AppCompatActivity() {
 
         binding.openMacFilesButton.setOnClickListener {
             saveDraft()
-            openMacFilesPage()
+            refreshMacFilesWithDiscovery()
         }
 
         handleIncomingShare(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        startMacFilesPolling()
+    }
+
+    override fun onStop() {
+        macFilesPollingJob?.cancel()
+        macFilesPollingJob = null
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -156,12 +188,12 @@ class MainActivity : AppCompatActivity() {
                 }
                 toast("已发现 Mac")
                 if (openFilesAfterDiscovery) {
-                    setBusy(false)
-                    openMacFilesPage()
+                    refreshMacFiles()
                 } else if (autoUploadAfterDiscovery && pickedUris.isNotEmpty() && !device.authRequired) {
                     uploadSelectedFiles()
                 } else {
                     setBusy(false)
+                    refreshMacFiles(silent = true)
                 }
             } else {
                 val message = result.exceptionOrNull()?.message ?: "发现失败"
@@ -193,20 +225,112 @@ class MainActivity : AppCompatActivity() {
         toast("已开始后台上传")
     }
 
-    private fun openMacFilesPage() {
+    private fun refreshMacFilesWithDiscovery() {
         val serverUrl = binding.serverUrlInput.text?.toString().orEmpty().trim()
         if (serverUrl.isEmpty()) {
             discoverMac(openFilesAfterDiscovery = true)
-            toast("先发现 Mac，再打开下载列表")
             return
         }
-        val normalizedUrl = if (serverUrl.startsWith("http://") || serverUrl.startsWith("https://")) {
-            serverUrl
-        } else {
-            "http://$serverUrl"
+        refreshMacFiles()
+    }
+
+    private fun refreshMacFiles(silent: Boolean = false) {
+        val serverUrl = binding.serverUrlInput.text?.toString().orEmpty().trim()
+        if (serverUrl.isEmpty()) {
+            if (!silent) {
+                binding.macFilesStatus.text = "先点“自动发现 Mac”，找到电脑后这里会显示 Mac 发来的文件。"
+            }
+            return
         }
-        val downloadUrl = normalizedUrl.trimEnd('/') + "/#from-mac"
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)))
+        if (!silent) {
+            binding.macFilesStatus.text = "正在查看 Mac 发来的文件…"
+        }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                repository.listMacFiles(serverUrl)
+            }
+            if (result.isSuccess) {
+                renderMacFiles(result.getOrThrow())
+            } else if (!silent) {
+                binding.macFilesStatus.text = result.exceptionOrNull()?.message ?: "查看失败，请确认 Mac 端还开着。"
+            }
+        }
+    }
+
+    private fun renderMacFiles(response: MacFilesResponse) {
+        macFiles = response.files
+        binding.macFilesList.removeAllViews()
+
+        binding.macFilesStatus.text = when {
+            response.activeTransferCount > 0 && response.activeTransferSenders.isNotEmpty() ->
+                getString(R.string.mac_files_sending_named, response.activeTransferSenders.joinToString("、"))
+            response.activeTransferCount > 0 -> getString(R.string.mac_files_sending)
+            response.files.isNotEmpty() -> getString(R.string.mac_files_ready, response.files.size)
+            else -> getString(R.string.mac_files_empty)
+        }
+
+        response.files.forEachIndexed { index, file ->
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                background = getDrawable(R.drawable.panel_bg)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = dp(8)
+                }
+            }
+
+            item.addView(TextView(this).apply {
+                text = file.name
+                setTextAppearance(android.R.style.TextAppearance_Material_Medium)
+            })
+            item.addView(TextView(this).apply {
+                text = listOf(file.sizeLabel, file.modifiedAt.take(16).replace("T", " ")).filter { it.isNotBlank() }.joinToString(" · ")
+                setTextAppearance(android.R.style.TextAppearance_Material_Small)
+                alpha = 0.72f
+                setPadding(0, dp(4), 0, dp(6))
+            })
+            item.addView(MaterialButton(this).apply {
+                text = getString(R.string.receive_file)
+                setOnClickListener { receiveMacFile(index) }
+            })
+            binding.macFilesList.addView(item)
+        }
+    }
+
+    private fun receiveMacFile(index: Int) {
+        val file = macFiles.getOrNull(index) ?: return
+        if (needsLegacyStoragePermission()) {
+            pendingReceiveIndex = index
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+        val serverUrl = binding.serverUrlInput.text?.toString().orEmpty().trim()
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                repository.receiveMacFile(serverUrl, file)
+            }
+            if (result.isSuccess) {
+                binding.statusText.text = getString(R.string.download_started, file.name)
+                toast("已开始接收")
+            } else {
+                val message = result.exceptionOrNull()?.message ?: "接收失败"
+                binding.statusText.text = message
+                toast(message)
+            }
+        }
+    }
+
+    private fun startMacFilesPolling() {
+        if (macFilesPollingJob?.isActive == true) return
+        macFilesPollingJob = lifecycleScope.launch {
+            while (isActive) {
+                refreshMacFiles(silent = true)
+                delay(3500)
+            }
+        }
     }
 
     private fun observeUpload(uploadId: UUID) {
@@ -320,5 +444,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun needsLegacyStoragePermission(): Boolean {
+        return Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 }

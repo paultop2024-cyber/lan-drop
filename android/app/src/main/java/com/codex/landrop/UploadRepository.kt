@@ -1,7 +1,9 @@
 package com.codex.landrop
 
+import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import androidx.core.net.toUri
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -36,6 +38,19 @@ data class DiscoveredDevice(
     val port: Int,
     val baseUrl: String,
     val authRequired: Boolean
+)
+
+data class MacDownloadFile(
+    val name: String,
+    val sizeLabel: String,
+    val modifiedAt: String,
+    val url: String
+)
+
+data class MacFilesResponse(
+    val files: List<MacDownloadFile>,
+    val activeTransferCount: Int,
+    val activeTransferSenders: List<String>
 )
 
 class UploadRepository(private val context: Context) {
@@ -266,6 +281,54 @@ class UploadRepository(private val context: Context) {
         return request.id
     }
 
+    fun listMacFiles(serverUrl: String): Result<MacFilesResponse> = runCatching {
+        val request = Request.Builder()
+            .url(buildUrl(serverUrl, "/api/phone-files"))
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            val payload = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                error(parseError(response.code, payload))
+            }
+            val json = JSONObject(payload)
+            val filesJson = json.optJSONArray("files") ?: JSONArray()
+            val files = List(filesJson.length()) { index ->
+                val item = filesJson.getJSONObject(index)
+                MacDownloadFile(
+                    name = item.optString("name"),
+                    sizeLabel = item.optString("sizeLabel"),
+                    modifiedAt = item.optString("modifiedAt"),
+                    url = item.optString("url")
+                )
+            }
+            val activeTransfers = json.optJSONArray("activeTransfers") ?: JSONArray()
+            val senders = List(activeTransfers.length()) { index ->
+                activeTransfers.getJSONObject(index).optString("sender").ifBlank { "Mac" }
+            }.distinct()
+            MacFilesResponse(
+                files = files,
+                activeTransferCount = activeTransfers.length(),
+                activeTransferSenders = senders
+            )
+        }
+    }
+
+    fun receiveMacFile(serverUrl: String, file: MacDownloadFile): Result<Long> = runCatching {
+        val downloadManager = context.getSystemService(DownloadManager::class.java)
+        val request = DownloadManager.Request(Uri.parse(buildUrl(serverUrl, file.url)))
+            .setTitle(file.name)
+            .setDescription("LAN Drop 正在接收 Mac 发来的文件")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+            .setDestinationInExternalPublicDir(
+                Environment.DIRECTORY_DOWNLOADS,
+                "LANDrop/${safeDownloadName(file.name)}"
+            )
+        downloadManager.enqueue(request)
+    }
+
     private fun resolveDisplayName(uri: Uri): String {
         val documentFile = androidx.documentfile.provider.DocumentFile.fromSingleUri(context, uri)
         return documentFile?.name ?: uri.lastPathSegment ?: "upload.bin"
@@ -291,5 +354,13 @@ class UploadRepository(private val context: Context) {
             "http://$normalized"
         }
         return prefixed.toUri().buildUpon().encodedPath(path).build().toString()
+    }
+
+    private fun safeDownloadName(name: String): String {
+        return name
+            .replace(Regex("""[\\/:*?"<>|]+"""), "-")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+            .ifBlank { "lan-drop-file" }
     }
 }

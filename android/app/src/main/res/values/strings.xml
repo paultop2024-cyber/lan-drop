@@ -8,7 +8,14 @@
     <string name="selected_count">已选 %1$d 个文件</string>
     <string name="no_files_selected">还没有选文件。</string>
     <string name="upload_now">直接发送到 Mac</string>
-    <string name="open_mac_files">打开 Mac 发来的文件</string>
+    <string name="open_mac_files">查看 Mac 发来的文件</string>
+    <string name="mac_files_title">Mac 发来的文件</string>
+    <string name="mac_files_empty">还没有 Mac 发来的文件。Mac 端选择文件后，这里会自动出现。</string>
+    <string name="mac_files_sending">Mac 正在发送文件，请稍等…</string>
+    <string name="mac_files_sending_named">%1$s 正在发送文件，请稍等…</string>
+    <string name="mac_files_ready">发现 %1$d 个可接收文件。</string>
+    <string name="receive_file">接收到手机</string>
+    <string name="download_started">已开始接收：%1$s，保存到 Downloads/LANDrop。</string>
     <string name="status_ready">准备好了，先点“自动发现 Mac”，再选文件发送。</string>
     <string name="testing_connection">正在测试连接…</string>
     <string name="discovering_mac">正在发现同一 Wi-Fi 下的 Mac…</string>

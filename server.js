@@ -12,6 +12,7 @@ const { execFile } = require("child_process");
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DISCOVERY_PORT = 50000;
+const activePhoneTransfers = new Map();
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -116,6 +117,21 @@ function uploadSessionRoot(uploadRoot) {
 
 function phoneShareRoot(uploadRoot) {
   return path.join(uploadRoot, ".lan-drop-to-phone");
+}
+
+function trackPhoneShareTransfer(req, res, next) {
+  const transferId = crypto.randomUUID();
+  const totalBytes = Number(req.headers["content-length"] || 0);
+  activePhoneTransfers.set(transferId, {
+    id: transferId,
+    sender: os.hostname() || "Mac",
+    totalBytes: Number.isFinite(totalBytes) ? totalBytes : 0,
+    totalLabel: Number.isFinite(totalBytes) && totalBytes > 0 ? bytesLabel(totalBytes) : "",
+    startedAt: new Date().toISOString(),
+  });
+  res.on("finish", () => activePhoneTransfers.delete(transferId));
+  res.on("close", () => activePhoneTransfers.delete(transferId));
+  next();
 }
 
 function normalizeSessionId(value) {
@@ -321,10 +337,14 @@ function buildApp(config) {
     if (!authOk(req, accessCode, accessDisabled)) {
       return res.status(401).json({ ok: false, error: "ACCESS_CODE_REQUIRED" });
     }
-    res.json({ ok: true, files: await listPhoneShareFiles(uploadRoot) });
+    res.json({
+      ok: true,
+      files: await listPhoneShareFiles(uploadRoot),
+      activeTransfers: Array.from(activePhoneTransfers.values()),
+    });
   });
 
-  app.post("/api/phone-files", phoneShareUpload.array("files"), async (req, res) => {
+  app.post("/api/phone-files", trackPhoneShareTransfer, phoneShareUpload.array("files"), async (req, res) => {
     if (!authOk(req, accessCode, accessDisabled)) {
       for (const file of req.files || []) {
         await fsp.rm(file.path, { force: true });
