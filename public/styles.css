@@ -301,7 +301,7 @@ h3 {
   font-weight: 750;
 }
 
-.dropzone,
+.receive-state,
 .phone-picker {
   display: grid;
   place-items: center;
@@ -320,6 +320,10 @@ h3 {
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
+.receive-state {
+  cursor: default;
+}
+
 .phone-picker {
   border-color: rgba(31, 157, 85, 0.24);
   background:
@@ -327,18 +331,34 @@ h3 {
     radial-gradient(circle at 50% 0%, rgba(31, 157, 85, 0.10), transparent 55%);
 }
 
-.dropzone:hover,
 .phone-picker:hover,
-.dropzone.dragover,
 .phone-picker.dragover {
   transform: translateY(-1px);
   border-color: rgba(0, 122, 255, 0.55);
   background-color: rgba(255, 255, 255, 0.8);
 }
 
-.dropzone input,
 .phone-picker input {
   display: none;
+}
+
+.receive-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(31, 157, 85, 0.14);
+  border-radius: 999px;
+  background: rgba(31, 157, 85, 0.08);
+  color: var(--good);
+  font-size: 13px;
+}
+
+.live-dot.small {
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 4px rgba(31, 157, 85, 0.12);
 }
 
 .drop-icon {

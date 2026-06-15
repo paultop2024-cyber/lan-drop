@@ -3,7 +3,6 @@ const state = {
   accessCode: localStorage.getItem("lanDropCode") || "",
   files: [],
   phoneFiles: [],
-  selectedFiles: [],
   phoneSelectedFiles: [],
 };
 
@@ -22,20 +21,11 @@ const els = {
   phoneDropzone: document.getElementById("phoneDropzone"),
   shareToPhoneBtn: document.getElementById("shareToPhoneBtn"),
   phoneShareResult: document.getElementById("phoneShareResult"),
-  pickedFiles: document.getElementById("pickedFiles"),
-  fileInput: document.getElementById("fileInput"),
-  uploadBtn: document.getElementById("uploadBtn"),
-  progressCard: document.getElementById("progressCard"),
-  progressLabel: document.getElementById("progressLabel"),
-  progressValue: document.getElementById("progressValue"),
-  progressFill: document.getElementById("progressFill"),
-  uploadResult: document.getElementById("uploadResult"),
   authDialog: document.getElementById("authDialog"),
   authForm: document.getElementById("authForm"),
   codeInput: document.getElementById("codeInput"),
   authError: document.getElementById("authError"),
   refreshBtn: document.getElementById("refreshBtn"),
-  dropzone: document.getElementById("dropzone"),
 };
 
 async function api(path, options = {}) {
@@ -76,30 +66,6 @@ function renderStatus() {
   els.accessCode.textContent = status.authRequired ? status.accessCodeHint : "未开启";
   els.uploadDir.textContent = status.uploadsDir;
   els.authBadge.textContent = status.authRequired ? "在线，需访问码" : "在线，免访问码";
-}
-
-function renderPickedFiles() {
-  if (!state.selectedFiles.length) {
-    els.pickedFiles.className = "picked-files empty";
-    els.pickedFiles.textContent = "还没有选文件";
-    els.uploadBtn.disabled = true;
-    return;
-  }
-  els.pickedFiles.className = "picked-files";
-  els.pickedFiles.innerHTML = state.selectedFiles
-    .map(
-      (file) => `
-        <div class="picked-file">
-          <div class="file-title">${escapeHtml(file.name)}</div>
-          <div class="file-meta">
-            <span>${(file.size / 1024 / 1024).toFixed(1)} MB</span>
-            <span>${escapeHtml(file.type || "未知类型")}</span>
-          </div>
-        </div>
-      `
-    )
-    .join("");
-  els.uploadBtn.disabled = false;
 }
 
 function renderPhonePickedFiles() {
@@ -238,31 +204,14 @@ async function loadPhoneFiles() {
 async function openUploadFolder() {
   try {
     await api("/api/open-upload-folder", { method: "POST" });
-    showResult("已在 Mac 上打开保存文件夹。", true);
+    showPhoneShareResult("已在 Mac 上打开保存文件夹。", true);
   } catch (error) {
     if (error.message === "AUTH") {
       await requestCode();
       return openUploadFolder();
     }
-    showResult("打开保存文件夹失败，请确认是在 Mac 端页面操作。", false);
+    showPhoneShareResult("打开保存文件夹失败，请确认是在 Mac 端页面操作。", false);
   }
-}
-
-function showProgress(percent, label) {
-  els.progressCard.hidden = false;
-  els.progressLabel.textContent = label;
-  els.progressValue.textContent = `${percent}%`;
-  els.progressFill.style.width = `${percent}%`;
-}
-
-function hideProgress() {
-  els.progressCard.hidden = true;
-}
-
-function showResult(html, ok = true) {
-  els.uploadResult.hidden = false;
-  els.uploadResult.style.color = ok ? "var(--good)" : "#dc2626";
-  els.uploadResult.innerHTML = html;
 }
 
 function showPhoneShareResult(html, ok = true) {
@@ -301,68 +250,6 @@ async function requestCode() {
     };
     els.authForm.addEventListener("submit", handler);
   });
-}
-
-async function uploadFiles() {
-  if (!state.selectedFiles.length) return;
-  if (state.status?.authRequired && !state.accessCode) {
-    await requestCode();
-  }
-  const formData = new FormData();
-  for (const file of state.selectedFiles) {
-    formData.append("files", file);
-  }
-
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", "/api/upload");
-  if (state.accessCode) {
-    xhr.setRequestHeader("x-access-code", state.accessCode);
-  }
-
-  showProgress(0, "准备上传");
-  showResult("", true);
-  els.uploadResult.hidden = true;
-  els.uploadBtn.disabled = true;
-
-  xhr.upload.onprogress = (event) => {
-    if (!event.lengthComputable) return;
-    const percent = Math.max(1, Math.round((event.loaded / event.total) * 100));
-    showProgress(percent, "上传中");
-  };
-
-  xhr.onload = async () => {
-    if (xhr.status === 401) {
-      hideProgress();
-      els.uploadBtn.disabled = false;
-      await requestCode();
-      return uploadFiles();
-    }
-    if (xhr.status < 200 || xhr.status >= 300) {
-      hideProgress();
-      els.uploadBtn.disabled = false;
-      showResult("上传失败了，请再试一次。", false);
-      return;
-    }
-    showProgress(100, "上传完成");
-    const result = JSON.parse(xhr.responseText);
-    showResult(
-      `收到 ${result.count} 个文件，已经保存到：<br><strong>${escapeHtml(result.savedTo)}</strong>`,
-      true
-    );
-    state.selectedFiles = [];
-    els.fileInput.value = "";
-    renderPickedFiles();
-    await loadFiles();
-    setTimeout(hideProgress, 800);
-  };
-
-  xhr.onerror = () => {
-    hideProgress();
-    els.uploadBtn.disabled = false;
-    showResult("网络中断了，请确认手机和 Mac 还在同一个 Wi‑Fi。", false);
-  };
-
-  xhr.send(formData);
 }
 
 async function shareFilesToPhone() {
@@ -411,26 +298,6 @@ async function deletePhoneFile(filename) {
   }
 }
 
-function bindDropzone() {
-  ["dragenter", "dragover"].forEach((eventName) => {
-    els.dropzone.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      els.dropzone.classList.add("dragover");
-    });
-  });
-  ["dragleave", "drop"].forEach((eventName) => {
-    els.dropzone.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      els.dropzone.classList.remove("dragover");
-    });
-  });
-  els.dropzone.addEventListener("drop", (event) => {
-    const files = Array.from(event.dataTransfer.files || []);
-    state.selectedFiles = files;
-    renderPickedFiles();
-  });
-}
-
 function bindPhoneDropzone() {
   ["dragenter", "dragover"].forEach((eventName) => {
     els.phoneDropzone.addEventListener(eventName, (event) => {
@@ -451,18 +318,23 @@ function bindPhoneDropzone() {
   });
 }
 
+function startAutoRefresh() {
+  window.setInterval(async () => {
+    try {
+      await loadFiles();
+      await loadPhoneFiles();
+    } catch (error) {
+      console.warn("Auto refresh failed", error);
+    }
+  }, 3000);
+}
+
 async function init() {
-  bindDropzone();
   bindPhoneDropzone();
-  els.fileInput.addEventListener("change", () => {
-    state.selectedFiles = Array.from(els.fileInput.files || []);
-    renderPickedFiles();
-  });
   els.phoneFileInput.addEventListener("change", () => {
     state.phoneSelectedFiles = Array.from(els.phoneFileInput.files || []);
     renderPhonePickedFiles();
   });
-  els.uploadBtn.addEventListener("click", uploadFiles);
   els.shareToPhoneBtn.addEventListener("click", shareFilesToPhone);
   els.phoneFilesList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-delete-phone-file]");
@@ -491,11 +363,11 @@ async function init() {
   }
   await loadFiles();
   await loadPhoneFiles();
-  renderPickedFiles();
   renderPhonePickedFiles();
+  startAutoRefresh();
 }
 
 init().catch((error) => {
   console.error(error);
-  showResult("页面初始化失败了，请刷新试试。", false);
+  showPhoneShareResult("页面初始化失败了，请刷新试试。", false);
 });

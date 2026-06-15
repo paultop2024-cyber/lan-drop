@@ -56,32 +56,20 @@
             <span id="recentCount" class="count-pill">0</span>
           </header>
 
-          <label class="dropzone" id="dropzone">
-            <input id="fileInput" type="file" multiple />
+          <div class="receive-state">
             <span class="drop-icon" aria-hidden="true">↓</span>
-            <span class="drop-title">等待手机发送，或拖文件到这里</span>
-            <span class="drop-subtitle">手机端点“直接发送到 Mac”。也可以在浏览器里手动选择文件上传。</span>
-          </label>
-
-          <div id="pickedFiles" class="picked-files empty">还没有选文件</div>
-          <button id="uploadBtn" class="primary-btn" type="button" disabled>上传到 Mac</button>
-
-          <div class="progress-card" id="progressCard" hidden>
-            <div class="progress-row">
-              <span id="progressLabel">准备上传</span>
-              <strong id="progressValue">0%</strong>
-            </div>
-            <div class="progress-bar">
-              <div id="progressFill"></div>
+            <span class="drop-title">正在等待手机发送</span>
+            <span class="drop-subtitle">手机端选择照片、视频或文件，点“直接发送到 Mac”。发送完成后，文件会自动出现在下面。</span>
+            <div class="receive-hint">
+              <span class="live-dot small" aria-hidden="true"></span>
+              <strong>接收服务已开启</strong>
             </div>
           </div>
-
-          <div id="uploadResult" class="result-card" hidden></div>
 
           <section class="mini-section">
             <div class="mini-head">
               <h3>最近收到</h3>
-              <span>自动保存到上面的文件夹</span>
+              <span>收到后自动刷新</span>
             </div>
             <div id="filesList" class="files-list empty">还没有收到文件</div>
           </section>
