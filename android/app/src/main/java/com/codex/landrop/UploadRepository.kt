@@ -1,9 +1,11 @@
 package com.codex.landrop
 
-import android.app.DownloadManager
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.net.toUri
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -20,6 +22,8 @@ import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.SocketTimeoutException
+import java.io.File
+import java.io.InputStream
 import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.Callable
@@ -130,11 +134,11 @@ class UploadRepository(private val context: Context) {
         return discovered
     }
 
-    private fun scanLocalNetwork(timeoutMillis: Int = 4500): DiscoveredDevice? {
+    private fun scanLocalNetwork(timeoutMillis: Int = 7000): DiscoveredDevice? {
         val hosts = localSubnetHosts()
         if (hosts.isEmpty()) return null
 
-        val executor = Executors.newFixedThreadPool(32)
+        val executor = Executors.newFixedThreadPool(64)
         val completion = ExecutorCompletionService<DiscoveredDevice?>(executor)
         hosts.forEach { host ->
             completion.submit(Callable { probeHost(host) })
@@ -199,6 +203,7 @@ class UploadRepository(private val context: Context) {
         networkInterfaces().forEach { networkInterface ->
             networkInterface.interfaceAddresses.forEach { interfaceAddress ->
                 val address = interfaceAddress.address as? Inet4Address ?: return@forEach
+                if (interfaceAddress.broadcast == null) return@forEach
                 if (address.isLoopbackAddress || address.isLinkLocalAddress) return@forEach
                 val hostAddress = address.hostAddress ?: return@forEach
                 val parts = hostAddress.split(".")
@@ -211,7 +216,21 @@ class UploadRepository(private val context: Context) {
                 }
             }
         }
+        commonHotspotPrefixes().forEach { prefix ->
+            for (host in 2..254) {
+                hosts.add("$prefix.$host")
+            }
+        }
         return hosts.toList()
+    }
+
+    private fun commonHotspotPrefixes(): List<String> {
+        return listOf(
+            "192.168.43",
+            "192.168.44",
+            "192.168.49",
+            "172.20.10"
+        )
     }
 
     private fun networkInterfaces(): List<NetworkInterface> {
@@ -314,20 +333,27 @@ class UploadRepository(private val context: Context) {
         }
     }
 
-    fun receiveMacFile(serverUrl: String, file: MacDownloadFile): Result<Long> = runCatching {
-        val downloadManager = context.getSystemService(DownloadManager::class.java)
-        val request = DownloadManager.Request(Uri.parse(buildUrl(serverUrl, file.url)))
-            .setTitle(file.name)
-            .setDescription("LAN Drop 正在接收 Mac 发来的文件")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI)
-            .setAllowedOverMetered(false)
-            .setAllowedOverRoaming(false)
-            .setDestinationInExternalPublicDir(
-                Environment.DIRECTORY_DOWNLOADS,
-                "LANDrop/${safeDownloadName(file.name)}"
+    fun receiveMacFile(
+        serverUrl: String,
+        file: MacDownloadFile,
+        onProgress: (percent: Int, label: String) -> Unit
+    ): Result<String> = runCatching {
+        val url = buildUrl(serverUrl, file.url)
+        ensureLanDownloadUrl(url)
+        val request = Request.Builder().url(url).get().build()
+        client.newCall(request).execute().use { response ->
+            val payload = response.body ?: error("Mac 没有返回文件内容")
+            if (!response.isSuccessful) {
+                error(parseError(response.code, payload.string()))
+            }
+            saveIncomingFile(
+                displayName = safeDownloadName(file.name),
+                mimeType = response.header("Content-Type"),
+                input = payload.byteStream(),
+                totalBytes = payload.contentLength(),
+                onProgress = onProgress
             )
-        downloadManager.enqueue(request)
+        }
     }
 
     private fun resolveDisplayName(uri: Uri): String {
@@ -355,6 +381,111 @@ class UploadRepository(private val context: Context) {
             "http://$normalized"
         }
         return prefixed.toUri().buildUpon().encodedPath(path).build().toString()
+    }
+
+    private fun ensureLanDownloadUrl(url: String) {
+        val host = Uri.parse(url).host ?: error("下载地址不完整")
+        val address = InetAddress.getByName(host)
+        val allowed = address.isSiteLocalAddress || address.isLinkLocalAddress || address.isLoopbackAddress
+        if (!allowed) {
+            error("为了避免误走公网流量，只允许从局域网地址接收文件。")
+        }
+    }
+
+    private fun saveIncomingFile(
+        displayName: String,
+        mimeType: String?,
+        input: InputStream,
+        totalBytes: Long,
+        onProgress: (percent: Int, label: String) -> Unit
+    ): String {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            saveIncomingFileModern(displayName, mimeType, input, totalBytes, onProgress)
+        } else {
+            saveIncomingFileLegacy(displayName, input, totalBytes, onProgress)
+        }
+    }
+
+    private fun saveIncomingFileModern(
+        displayName: String,
+        mimeType: String?,
+        input: InputStream,
+        totalBytes: Long,
+        onProgress: (percent: Int, label: String) -> Unit
+    ): String {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType?.takeIf { it.isNotBlank() } ?: "application/octet-stream")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/LANDrop")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error("无法创建下载文件")
+        try {
+            resolver.openOutputStream(uri)?.use { output ->
+                copyWithProgress(input, output, totalBytes, displayName, onProgress)
+            } ?: error("无法写入下载文件")
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            return "Downloads/LANDrop/$displayName"
+        } catch (error: Exception) {
+            resolver.delete(uri, null, null)
+            throw error
+        }
+    }
+
+    private fun saveIncomingFileLegacy(
+        displayName: String,
+        input: InputStream,
+        totalBytes: Long,
+        onProgress: (percent: Int, label: String) -> Unit
+    ): String {
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "LANDrop")
+        dir.mkdirs()
+        val target = uniqueFile(dir, displayName)
+        target.outputStream().use { output ->
+            copyWithProgress(input, output, totalBytes, displayName, onProgress)
+        }
+        return target.absolutePath
+    }
+
+    private fun copyWithProgress(
+        input: InputStream,
+        output: java.io.OutputStream,
+        totalBytes: Long,
+        displayName: String,
+        onProgress: (percent: Int, label: String) -> Unit
+    ) {
+        val buffer = ByteArray(256 * 1024)
+        var copied = 0L
+        onProgress(0, "正在接收：$displayName")
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            output.write(buffer, 0, read)
+            copied += read
+            if (totalBytes > 0) {
+                val percent = ((copied * 100) / totalBytes).toInt().coerceIn(0, 100)
+                onProgress(percent, "正在接收：$displayName")
+            }
+        }
+        output.flush()
+        onProgress(100, "接收完成：$displayName")
+    }
+
+    private fun uniqueFile(dir: File, displayName: String): File {
+        val base = displayName.substringBeforeLast('.', displayName)
+        val ext = displayName.substringAfterLast('.', "")
+        var candidate = File(dir, displayName)
+        var index = 1
+        while (candidate.exists()) {
+            val suffix = if (ext.isBlank()) " ($index)" else " ($index).$ext"
+            candidate = File(dir, "$base$suffix")
+            index += 1
+        }
+        return candidate
     }
 
     private fun safeDownloadName(name: String): String {

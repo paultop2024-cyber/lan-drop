@@ -12,7 +12,8 @@ Native Android client for LAN Drop.
 - Falls back to `/api/upload` if the Mac receiver does not support resumable endpoints.
 - Accepts files from Android's system share sheet, including photos, videos, and documents.
 - Shows Mac-to-phone files inside the Android app.
-- Receives Mac-to-phone files directly into `Downloads/LANDrop` through Android Download Manager.
+- Receives Mac-to-phone files directly into `Downloads/LANDrop` through the app's built-in LAN downloader.
+- Supports Android hotspot mode: turn on the phone hotspot, connect the Mac to it, then use discovery or the Mac LAN URL.
 
 ## Build
 
@@ -34,5 +35,7 @@ app/build/outputs/apk/debug/app-debug.apk
 4. Tap `打开相册/文件` or share files from another Android app to `LAN Drop`.
 5. Tap `直接发送到 Mac`.
 6. To receive files from the Mac, tap `查看 Mac 发来的文件`, then tap `接收到手机`.
+
+If there is no Wi-Fi router, turn on the Android phone hotspot and connect the Mac to it. Transfers still stay inside the local hotspot network.
 
 On Android 13+, allow notification permission if you want to see background upload progress in the notification area.

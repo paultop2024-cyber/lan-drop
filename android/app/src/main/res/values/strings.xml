@@ -15,7 +15,8 @@
     <string name="mac_files_sending_named">%1$s 正在发送文件，请稍等…</string>
     <string name="mac_files_ready">发现 %1$d 个可接收文件。</string>
     <string name="receive_file">接收到手机</string>
-    <string name="download_started">已开始接收：%1$s，保存到 Downloads/LANDrop。</string>
+    <string name="download_started">正在接收：%1$s</string>
+    <string name="download_finished">已接收：%1$s，保存到 %2$s。</string>
     <string name="status_ready">准备好了，先点“自动发现 Mac”，再选文件发送。</string>
     <string name="testing_connection">正在测试连接…</string>
     <string name="discovering_mac">正在发现同一 Wi-Fi 下的 Mac…</string>

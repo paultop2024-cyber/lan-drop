@@ -13,6 +13,7 @@ LAN Drop 是一个面向 **Android 手机 ↔ Mac** 的局域网 Wi-Fi 文件快
 - Mac 端提供网页接收界面、二维码入口、最近文件列表和“一键打开保存文件夹”。
 - Mac 可以选择本机文件放进“发到手机”列表，Android App 会直接显示待接收文件。
 - Android App 内可查看 Mac 正在发送的提示，点“接收到手机”后直接保存到 `Downloads/LANDrop`，不再跳浏览器。
+- 支持手机开热点、Mac 连接手机热点后的双向传输；Mac → Android 接收使用 App 内置局域网下载器，不依赖系统下载器的 Wi-Fi 判断。
 - Mac 桌面 App 自动启动本地 Node 服务，桌面版默认免访问码。
 - 命令行模式默认生成访问码，也可通过环境变量关闭。
 - 所有文件默认保存在 `~/Downloads/LANDrop`，并按日期分目录存放。
@@ -86,6 +87,8 @@ android/app/build/outputs/apk/debug/app-debug.apk
 Install the APK on an Android phone, open the Mac app, then tap `自动发现 Mac` in Android. You can also select photos/videos/files in another app, tap `分享`, and choose `LAN Drop`.
 
 For Mac → Android transfer, choose files in the Mac web UI under `Mac 发到手机`, then open the Android app and tap `查看 Mac 发来的文件`. Files appear in the app and can be received directly into `Downloads/LANDrop`.
+
+No router nearby? Turn on the Android phone hotspot, connect the Mac to that hotspot, then use the same flow. LAN Drop scans common Android hotspot subnets and keeps transfers on private LAN addresses.
 
 ## Configuration
 

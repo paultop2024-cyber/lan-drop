@@ -308,14 +308,31 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val serverUrl = binding.serverUrlInput.text?.toString().orEmpty().trim()
+        binding.progressBar.visibility = View.VISIBLE
+        binding.progressText.visibility = View.VISIBLE
+        binding.progressBar.isIndeterminate = false
+        binding.progressBar.max = 100
+        binding.progressBar.progress = 0
+        binding.progressText.text = getString(R.string.download_started, file.name)
+        binding.statusText.text = getString(R.string.download_started, file.name)
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                repository.receiveMacFile(serverUrl, file)
+                repository.receiveMacFile(serverUrl, file) { percent, label ->
+                    runOnUiThread {
+                        binding.progressBar.progress = percent
+                        binding.progressText.text = "$percent% · $label"
+                    }
+                }
             }
             if (result.isSuccess) {
-                binding.statusText.text = getString(R.string.download_started, file.name)
-                toast("已开始接收")
+                binding.progressBar.progress = 100
+                binding.progressText.text = "100% · 接收完成"
+                binding.statusText.text = getString(R.string.download_finished, file.name, result.getOrThrow())
+                toast("接收完成")
+                refreshMacFiles(silent = true)
             } else {
+                binding.progressBar.visibility = View.GONE
+                binding.progressText.visibility = View.GONE
                 val message = result.exceptionOrNull()?.message ?: "接收失败"
                 binding.statusText.text = message
                 toast(message)
