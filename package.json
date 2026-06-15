@@ -1,6 +1,6 @@
 {
   "name": "lan-drop",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "LAN Wi-Fi file drop for fast two-way Android and Mac transfer.",
   "main": "server.js",
   "scripts": {

@@ -14,9 +14,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.NetworkInterface
 import java.net.SocketTimeoutException
+import java.util.Collections
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorCompletionService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 data class UploadResponse(
@@ -41,6 +47,12 @@ class UploadRepository(private val context: Context) {
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)
         .build()
+    private val discoveryHttpClient = OkHttpClient.Builder()
+        .connectTimeout(350, TimeUnit.MILLISECONDS)
+        .readTimeout(600, TimeUnit.MILLISECONDS)
+        .writeTimeout(600, TimeUnit.MILLISECONDS)
+        .callTimeout(900, TimeUnit.MILLISECONDS)
+        .build()
 
     fun getServerUrl(): String = prefs.getString("server_url", "") ?: ""
 
@@ -62,6 +74,12 @@ class UploadRepository(private val context: Context) {
     }
 
     fun discoverMac(timeoutMillis: Int = 3500): Result<DiscoveredDevice> = runCatching {
+        discoverViaUdp(timeoutMillis)?.let { return@runCatching it }
+        scanLocalNetwork()?.let { return@runCatching it }
+        error("没有发现 Mac。已尝试自动广播和局域网扫描，请确认手机和 Mac 在同一个 Wi-Fi，或手动输入 Mac 页面显示的地址。")
+    }
+
+    private fun discoverViaUdp(timeoutMillis: Int): DiscoveredDevice? {
         val requestJson = JSONObject()
             .put("type", "discover")
             .put("device_name", android.os.Build.MODEL ?: "Android")
@@ -71,40 +89,121 @@ class UploadRepository(private val context: Context) {
         var discovered: DiscoveredDevice? = null
         DatagramSocket().use { socket ->
             socket.broadcast = true
-            socket.soTimeout = timeoutMillis
-            val packet = DatagramPacket(
-                requestJson,
-                requestJson.size,
-                InetAddress.getByName("255.255.255.255"),
-                50000
-            )
-            socket.send(packet)
+            discoveryBroadcastAddresses().forEach { address ->
+                val packet = DatagramPacket(requestJson, requestJson.size, address, 50000)
+                runCatching { socket.send(packet) }
+            }
 
             val buffer = ByteArray(2048)
             val response = DatagramPacket(buffer, buffer.size)
-            while (true) {
+            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis.toLong())
+            while (System.nanoTime() < deadline) {
                 try {
+                    val remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime()).coerceAtLeast(1)
+                    socket.soTimeout = remainingMillis.coerceAtMost(500).toInt()
                     socket.receive(response)
                     val text = String(response.data, 0, response.length, Charsets.UTF_8)
                     val json = JSONObject(text)
                     if (json.optString("type") != "response") continue
-                    val baseUrl = json.optString("baseUrl").ifBlank {
-                        "http://${json.optString("ip")}:${json.optInt("port", 4318)}"
-                    }
-                    discovered = DiscoveredDevice(
-                        name = json.optString("device_name").ifBlank { "Mac" },
-                        ip = json.optString("ip"),
-                        port = json.optInt("port", 4318),
-                        baseUrl = baseUrl,
-                        authRequired = json.optBoolean("authRequired", true)
-                    )
+                    discovered = deviceFromStatusJson(json)
                     return@use
                 } catch (_: SocketTimeoutException) {
-                    error("没有发现 Mac。请确认 Mac 端 LAN Drop 已打开，手机和 Mac 在同一个 Wi-Fi。")
+                    // Keep listening until the overall discovery window expires.
                 }
             }
         }
-        discovered ?: error("没有发现 Mac。请确认 Mac 端 LAN Drop 已打开，手机和 Mac 在同一个 Wi-Fi。")
+        return discovered
+    }
+
+    private fun scanLocalNetwork(timeoutMillis: Int = 4500): DiscoveredDevice? {
+        val hosts = localSubnetHosts()
+        if (hosts.isEmpty()) return null
+
+        val executor = Executors.newFixedThreadPool(32)
+        val completion = ExecutorCompletionService<DiscoveredDevice?>(executor)
+        hosts.forEach { host ->
+            completion.submit(Callable { probeHost(host) })
+        }
+
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis.toLong())
+        try {
+            for (index in hosts.indices) {
+                val remaining = deadline - System.nanoTime()
+                if (remaining <= 0) return null
+                val future = completion.poll(remaining, TimeUnit.NANOSECONDS) ?: return null
+                val device = runCatching { future.get() }.getOrNull()
+                if (device != null) return device
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+        return null
+    }
+
+    private fun probeHost(host: String): DiscoveredDevice? {
+        val url = "http://$host:4318/api/status"
+        val request = Request.Builder().url(url).get().build()
+        return runCatching {
+            discoveryHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val json = JSONObject(response.body?.string().orEmpty())
+                if (!json.optBoolean("ok", false)) return@use null
+                deviceFromStatusJson(json, fallbackIp = host)
+            }
+        }.getOrNull()
+    }
+
+    private fun deviceFromStatusJson(json: JSONObject, fallbackIp: String = ""): DiscoveredDevice {
+        val ip = json.optString("ip").ifBlank { fallbackIp }
+        val port = json.optInt("port", 4318)
+        val baseUrl = json.optString("baseUrl").ifBlank { "http://$ip:$port" }
+        return DiscoveredDevice(
+            name = json.optString("device_name")
+                .ifBlank { json.optString("deviceName") }
+                .ifBlank { "Mac" },
+            ip = ip,
+            port = port,
+            baseUrl = baseUrl,
+            authRequired = json.optBoolean("authRequired", true)
+        )
+    }
+
+    private fun discoveryBroadcastAddresses(): List<InetAddress> {
+        val addresses = linkedSetOf<InetAddress>()
+        addresses.add(InetAddress.getByName("255.255.255.255"))
+        networkInterfaces().forEach { networkInterface ->
+            networkInterface.interfaceAddresses.forEach { interfaceAddress ->
+                interfaceAddress.broadcast?.let { addresses.add(it) }
+            }
+        }
+        return addresses.toList()
+    }
+
+    private fun localSubnetHosts(): List<String> {
+        val hosts = linkedSetOf<String>()
+        networkInterfaces().forEach { networkInterface ->
+            networkInterface.interfaceAddresses.forEach { interfaceAddress ->
+                val address = interfaceAddress.address as? Inet4Address ?: return@forEach
+                if (address.isLoopbackAddress || address.isLinkLocalAddress) return@forEach
+                val hostAddress = address.hostAddress ?: return@forEach
+                val parts = hostAddress.split(".")
+                if (parts.size != 4) return@forEach
+                val prefix = parts.take(3).joinToString(".")
+                val ownHost = parts.last().toIntOrNull()
+                for (host in 1..254) {
+                    if (host == ownHost) continue
+                    hosts.add("$prefix.$host")
+                }
+            }
+        }
+        return hosts.toList()
+    }
+
+    private fun networkInterfaces(): List<NetworkInterface> {
+        return runCatching {
+            Collections.list(NetworkInterface.getNetworkInterfaces())
+                .filter { it.isUp && !it.isLoopback }
+        }.getOrDefault(emptyList())
     }
 
     fun uploadFiles(
